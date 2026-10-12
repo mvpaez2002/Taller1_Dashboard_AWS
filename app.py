@@ -8,11 +8,13 @@ import pandas as pd
 import datetime as dt
 
 
-
 app = dash.Dash(
     __name__,
-    meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
+    meta_tags=[
+        {"name": "viewport", "content": "width=device-width, initial-scale=1"}
+    ],
 )
+
 app.title = "Dashboard energia"
 
 server = app.server
@@ -21,51 +23,91 @@ app.config.suppress_callback_exceptions = True
 
 # Load data from csv
 def load_data():
-    # To do: Completar la función 
-    
+    data = pd.read_csv("datos_energia.csv")
+
+    # Identificar la columna que contiene la fecha
+    posibles_fechas = [
+        "datetime",
+        "date",
+        "Date",
+        "fecha",
+        "Fecha",
+        "time",
+        "timestamp",
+        "utc_timestamp",
+        "local_timestamp",
+    ]
+
+    columna_fecha = next(
+        (col for col in posibles_fechas if col in data.columns),
+        None,
+    )
+
+    if columna_fecha is None:
+        raise ValueError(
+            "No se encontró la columna de fecha. "
+            f"Columnas disponibles: {data.columns.tolist()}"
+        )
+
+    # Convertir la columna de fecha a datetime
+    data[columna_fecha] = pd.to_datetime(
+        data[columna_fecha],
+        errors="raise"
+    )
+
+    # Establecer la fecha como índice
+    data = data.set_index(columna_fecha)
+
+    # Ordenar cronológicamente
+    data = data.sort_index()
+
+    return data
+
 
 # Cargar datos
 data = load_data()
 
+
 # Graficar serie
 def plot_series(data, initial_date, proy):
     data_plot = data.loc[initial_date:]
-    data_plot = data_plot[:-(120-proy)]
+    data_plot = data_plot[:-(120 - proy)] if proy < 120 else data_plot
+
     fig = go.Figure([
         go.Scatter(
-            name='Demanda energética',
+            name="Demanda energética",
             x=data_plot.index,
-            y=data_plot['AT_load_actual_entsoe_transparency'],
-            mode='lines',
+            y=data_plot["AT_load_actual_entsoe_transparency"],
+            mode="lines",
             line=dict(color="#188463"),
         ),
         go.Scatter(
-            name='Proyección',
+            name="Proyección",
             x=data_plot.index,
-            y=data_plot['forecast'],
-            mode='lines',
-            line=dict(color="#bbffeb",),
+            y=data_plot["forecast"],
+            mode="lines",
+            line=dict(color="#bbffeb"),
         ),
         go.Scatter(
-            name='Upper Bound',
+            name="Upper Bound",
             x=data_plot.index,
-            y=data_plot['Upper bound'],
-            mode='lines',
+            y=data_plot["Upper bound"],
+            mode="lines",
             marker=dict(color="#444"),
             line=dict(width=0),
-            showlegend=False
+            showlegend=False,
         ),
         go.Scatter(
-            name='Lower Bound',
+            name="Lower Bound",
             x=data_plot.index,
-            y=data_plot['Lower bound'],
+            y=data_plot["Lower bound"],
             marker=dict(color="#444"),
             line=dict(width=0),
-            mode='lines',
+            mode="lines",
             fillcolor="rgba(242, 255, 251, 0.3)",
-            fill='tonexty',
-            showlegend=False
-        )
+            fill="tonexty",
+            showlegend=False,
+        ),
     ])
 
     fig.update_layout(
@@ -74,34 +116,46 @@ def plot_series(data, initial_date, proy):
             yanchor="bottom",
             y=1.02,
             xanchor="right",
-            x=1
+            x=1,
         ),
-        yaxis_title='Demanda total [MW]',
-        #title='Continuous, variable value error bars',
-        hovermode="x"
+        yaxis_title="Demanda total [MW]",
+        hovermode="x",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font_color="#2cfec1",
     )
-    #fig = px.line(data2, x='local_timestamp', y="Demanda total [MW]", markers=True, labels={"local_timestamp": "Fecha"})
-    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="#2cfec1")
-    fig.update_xaxes(showgrid=True, gridwidth=0.25, gridcolor='#7C7C7C')
-    fig.update_yaxes(showgrid=True, gridwidth=0.25, gridcolor='#7C7C7C')
-    #fig.update_traces(line_color='#2cfec1')
+
+    fig.update_xaxes(
+        showgrid=True,
+        gridwidth=0.25,
+        gridcolor="#7C7C7C",
+    )
+
+    fig.update_yaxes(
+        showgrid=True,
+        gridwidth=0.25,
+        gridcolor="#7C7C7C",
+    )
 
     return fig
 
 
-
 def description_card():
     """
-    :return: A Div containing dashboard title & descriptions.
+    Retorna el título y la descripción del tablero.
     """
     return html.Div(
         id="description-card",
         children=[
-            #html.H5("Proyecto 1"),
             html.H3("Pronóstico de producción energética"),
             html.Div(
                 id="intro",
-                children="Esta herramienta contiene información sobre la demanda energética total en Austria cada hora según lo públicado en ENTSO-E Data Portal. Adicionalmente, permite realizar pronósticos hasta 5 dias en el futuro."
+                children=(
+                    "Esta herramienta contiene información sobre la demanda "
+                    "energética total en Austria cada hora según lo publicado "
+                    "en ENTSO-E Data Portal. Adicionalmente, permite realizar "
+                    "pronósticos hasta 5 días en el futuro."
+                ),
             ),
         ],
     )
@@ -109,13 +163,11 @@ def description_card():
 
 def generate_control_card():
     """
-    :return: A Div containing controls for graphs.
+    Retorna los controles para la gráfica.
     """
     return html.Div(
         id="control-card",
         children=[
-
-            # Fecha inicial
             html.P("Seleccionar fecha y hora inicial:"),
 
             html.Div(
@@ -125,37 +177,43 @@ def generate_control_card():
                         id="componente-fecha",
                         children=[
                             dcc.DatePickerSingle(
-                                id='datepicker-inicial',
+                                id="datepicker-inicial",
                                 min_date_allowed=min(data.index.date),
                                 max_date_allowed=max(data.index.date),
-                                initial_visible_month=min(data.index.date),
-                                date=max(data.index.date)-dt.timedelta(days=7)
+                                initial_visible_month=max(data.index.date),
+                                date=max(data.index.date) - dt.timedelta(days=7),
                             )
                         ],
-                        style=dict(width='30%')
+                        style=dict(width="30%"),
                     ),
-                    
-                    html.P(" ",style=dict(width='5%', textAlign='center')),
-                    
+
+                    html.P(
+                        " ",
+                        style=dict(width="5%", textAlign="center"),
+                    ),
+
                     html.Div(
                         id="componente-hora",
                         children=[
                             dcc.Dropdown(
                                 id="dropdown-hora-inicial-hora",
-                                options=[{"label": i, "value": i} for i in np.arange(0,25)],
-                                value=pd.to_datetime(max(data.index)-dt.timedelta(days=7)).hour,
-                                # style=dict(width='50%', display="inline-block")
+                                options=[
+                                    {"label": i, "value": i}
+                                    for i in range(24)
+                                ],
+                                value=pd.to_datetime(
+                                    max(data.index) - dt.timedelta(days=7)
+                                ).hour,
                             )
                         ],
-                        style=dict(width='20%')
+                        style=dict(width="20%"),
                     ),
                 ],
-                style=dict(display='flex')
+                style=dict(display="flex"),
             ),
 
             html.Br(),
 
-            # Slider proyección
             html.Div(
                 id="campo-slider",
                 children=[
@@ -167,51 +225,48 @@ def generate_control_card():
                         step=1,
                         value=0,
                         marks=None,
-                        tooltip={"placement": "bottom", "always_visible": True},
-                    )
-                ]
-            )     
-     
-        ]
+                        tooltip={
+                            "placement": "bottom",
+                            "always_visible": True,
+                        },
+                    ),
+                ],
+            ),
+        ],
     )
 
 
 app.layout = html.Div(
     id="app-container",
     children=[
-        
-        # Left column
+        # Columna izquierda
         html.Div(
             id="left-column",
             className="four columns",
-            children=[description_card(), generate_control_card()]
-            + [
+            children=[
+                description_card(),
+                generate_control_card(),
                 html.Div(
-                    ["initial child"], id="output-clientside", style={"display": "none"}
-                )
+                    ["initial child"],
+                    id="output-clientside",
+                    style={"display": "none"},
+                ),
             ],
         ),
-        
-        # Right column
+
+        # Columna derecha
         html.Div(
             id="right-column",
             className="eight columns",
             children=[
-
-
-                # Grafica de la serie de tiempo
                 html.Div(
                     id="model_graph",
                     children=[
                         html.B("Demanda energética total en Austria [MW]"),
                         html.Hr(),
-                        dcc.Graph(
-                            id="plot_series",  
-                        )
+                        dcc.Graph(id="plot_series"),
                     ],
                 ),
-
-            
             ],
         ),
     ],
@@ -219,25 +274,24 @@ app.layout = html.Div(
 
 
 @app.callback(
-    Output(component_id="plot_series", component_property="figure"),
-    [Input(component_id="datepicker-inicial", component_property="date"),
-    Input(component_id="dropdown-hora-inicial-hora", component_property="value"),
-    Input(component_id="slider-proyeccion", component_property="value")]
+    Output("plot_series", "figure"),
+    [
+        Input("datepicker-inicial", "date"),
+        Input("dropdown-hora-inicial-hora", "value"),
+        Input("slider-proyeccion", "value"),
+    ],
 )
 def update_output_div(date, hour, proy):
+    if date is not None and hour is not None and proy is not None:
+        initial_date = pd.to_datetime(
+            f"{date} {int(hour):02d}:00",
+            format="%Y-%m-%d %H:%M",
+        )
 
-    if ((date is not None) & (hour is not None) & (proy is not None)):
-        hour = str(hour)
-        minute = str(0)
-
-        initial_date = date + " " + hour + ":" + minute
-        initial_date = pd.to_datetime(initial_date, format="%Y-%m-%d %H:%M")
-
-        # Graficar
-        plot = plot_series(data, initial_date, int(proy))
-        return plot
+        return plot_series(data, initial_date, int(proy))
 
 
 # Run the server
 if __name__ == "__main__":
     app.run(debug=True)
+
